@@ -18,10 +18,19 @@ export interface ProductImage {
   sortOrder: number
 }
 
+export interface ShippingRate {
+  governorate: string
+  cost: number
+}
+
 export interface Order {
   id: string
   customerName: string
   customerPhone: string
+  customerAddress?: string
+  governorate?: string
+  shippingCost?: number
+  subtotal?: number
   status: OrderStatus
   totalAmount: number
   notes: string
@@ -56,6 +65,9 @@ export interface PharmacySettings {
   currency: string
   adminUsername: string
   adminPassword: string
+  shippingRates?: string // JSON Record<string, number>
+  defaultShippingCost?: number
+  freeShippingThreshold?: number
 }
 
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {

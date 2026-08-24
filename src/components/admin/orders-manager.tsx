@@ -95,6 +95,10 @@ export function OrdersManager({ currency, settings }: OrdersManagerProps) {
       pharmacyName: settings.pharmacyName || 'الصيدلية',
       customerName: order.customerName,
       customerPhone: order.customerPhone,
+      customerAddress: order.customerAddress,
+      governorate: order.governorate,
+      shippingCost: order.shippingCost,
+      subtotal: order.subtotal,
       notes: order.notes,
       items: order.items.map((i) => ({
         productName: i.productName,
@@ -116,6 +120,10 @@ export function OrdersManager({ currency, settings }: OrdersManagerProps) {
       pharmacyName: settings.pharmacyName || 'الصيدلية',
       customerName: order.customerName,
       customerPhone: order.customerPhone,
+      customerAddress: order.customerAddress,
+      governorate: order.governorate,
+      shippingCost: order.shippingCost,
+      subtotal: order.subtotal,
       notes: order.notes,
       items: order.items.map((i) => ({
         productName: i.productName,
@@ -337,9 +345,23 @@ export function OrdersManager({ currency, settings }: OrdersManagerProps) {
                     {selectedOrder.customerPhone} (المعالج: +{normalizeWhatsAppNumber(selectedOrder.customerPhone)})
                   </span>
                 </div>
+                {selectedOrder.governorate && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">المحافظة:</span>
+                    <span className="font-bold text-slate-800 bg-emerald-100/70 text-emerald-900 px-2 py-0.5 rounded">
+                      {selectedOrder.governorate}
+                    </span>
+                  </div>
+                )}
+                {selectedOrder.customerAddress && (
+                  <div className="pt-1 border-t">
+                    <span className="text-muted-foreground block mb-0.5">العنوان بالتفصيل:</span>
+                    <p className="bg-white p-2 rounded border text-gray-800">{selectedOrder.customerAddress}</p>
+                  </div>
+                )}
                 {selectedOrder.notes && (
                   <div className="pt-1 border-t">
-                    <span className="text-muted-foreground block mb-0.5">العنوان / ملاحظات:</span>
+                    <span className="text-muted-foreground block mb-0.5">ملاحظات إضافية:</span>
                     <p className="bg-white p-2 rounded border text-gray-800">{selectedOrder.notes}</p>
                   </div>
                 )}
@@ -367,7 +389,7 @@ export function OrdersManager({ currency, settings }: OrdersManagerProps) {
                 </div>
               </div>
 
-              {/* Order Items */}
+              {/* Order Items & Breakdown */}
               <div className="space-y-2">
                 <h4 className="text-xs font-bold text-gray-900">الأصناف المطلوبة:</h4>
                 <div className="divide-y border rounded-lg overflow-hidden bg-white text-xs">
@@ -383,11 +405,27 @@ export function OrdersManager({ currency, settings }: OrdersManagerProps) {
                     </div>
                   ))}
                 </div>
-                <div className="flex justify-between items-center bg-emerald-50 p-3 rounded-lg border border-emerald-200">
-                  <span className="font-bold text-sm text-emerald-950">الإجمالي النهائي:</span>
-                  <span className="text-lg font-bold text-emerald-700">
-                    {selectedOrder.totalAmount.toFixed(2)} {currency}
-                  </span>
+
+                {/* Shipping & Subtotal Breakdown */}
+                <div className="bg-slate-50 p-3 rounded-lg border text-xs space-y-1.5">
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span>إجمالي المنتجات:</span>
+                    <span className="font-semibold font-mono text-slate-900">
+                      {(selectedOrder.subtotal ?? selectedOrder.totalAmount - (selectedOrder.shippingCost || 0)).toFixed(2)} {currency}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span>قيمة التوصيل ({selectedOrder.governorate || 'الشحن'}):</span>
+                    <span className="font-semibold font-mono text-slate-900">
+                      {selectedOrder.shippingCost !== undefined ? `${selectedOrder.shippingCost.toFixed(2)} ${currency}` : '—'}
+                    </span>
+                  </div>
+                  <div className="pt-1.5 border-t flex justify-between items-center font-bold text-emerald-950 text-sm">
+                    <span>الإجمالي الكلي النهائي:</span>
+                    <span className="text-base font-extrabold text-emerald-700 font-mono">
+                      {selectedOrder.totalAmount.toFixed(2)} {currency}
+                    </span>
+                  </div>
                 </div>
               </div>
 

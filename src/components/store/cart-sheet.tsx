@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   Sheet,
   SheetContent,
@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import {
   ShoppingBag,
@@ -22,7 +23,10 @@ import {
   CheckCircle2,
   ExternalLink,
   Copy,
-  AlertCircle
+  AlertCircle,
+  Truck,
+  MapPin,
+  Gift
 } from 'lucide-react'
 import Image from '@/components/common/Image'
 import { useCartStore } from '@/store/cart-store'
@@ -33,6 +37,11 @@ import {
   openWhatsApp,
   buildWhatsAppUrl
 } from '@/lib/phone-utils'
+import {
+  EGYPTIAN_GOVERNORATES,
+  parseShippingRates,
+  calculateShippingFee
+} from '@/lib/shipping-utils'
 import { createOrderInFirebase } from '@/lib/firebase'
 import type { PharmacySettings, WhatsAppEntry, Order } from '@/lib/types'
 
@@ -44,14 +53,16 @@ interface CartSheetProps {
 
 export function CartSheet({ open, onOpenChange, settings }: CartSheetProps) {
   const items = useCartStore((s) => s.items)
-  const updateQuantity = useCartStore((s) => s.updateQuantity)
   const removeItem = useCartStore((s) => s.removeItem)
+  const updateQuantity = useCartStore((s) => s.updateQuantity)
   const clearCart = useCartStore((s) => s.clearCart)
   const getTotal = useCartStore((s) => s.getTotal)
   const isMobile = useIsMobile()
 
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
+  const [selectedGovernorate, setSelectedGovernorate] = useState<string>('القاهرة')
+  const [customerAddress, setCustomerAddress] = useState('')
   const [notes, setNotes] = useState('')
   const [selectedWhatsApp, setSelectedWhatsApp] = useState<string>('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -64,7 +75,26 @@ export function CartSheet({ open, onOpenChange, settings }: CartSheetProps) {
   } | null>(null)
   const [copied, setCopied] = useState(false)
 
-  const total = getTotal()
+  const subtotal = getTotal()
+
+  // Parse shipping rates
+  const shippingRates = useMemo(() => {
+    return parseShippingRates(settings.shippingRates)
+  }, [settings.shippingRates])
+
+  // Calculate live shipping cost
+  const { cost: shippingCost, isFree: isFreeShipping, originalCost } = useMemo(() => {
+    return calculateShippingFee(
+      selectedGovernorate,
+      subtotal,
+      shippingRates,
+      settings.freeShippingThreshold,
+      settings.defaultShippingCost || 35
+    )
+  }, [selectedGovernorate, subtotal, shippingRates, settings.freeShippingThreshold, settings.defaultShippingCost])
+
+  const grandTotal = subtotal + shippingCost
+  const currency = settings.currency || 'ج.م'
 
   // Parse available whatsapp numbers
   let whatsappList: WhatsAppEntry[] = []
@@ -126,8 +156,12 @@ export function CartSheet({ open, onOpenChange, settings }: CartSheetProps) {
         id: orderId,
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim(),
+        customerAddress: customerAddress.trim(),
+        governorate: selectedGovernorate,
+        shippingCost,
+        subtotal,
         status: 'pending',
-        totalAmount: total,
+        totalAmount: grandTotal,
         notes: notes.trim(),
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -146,12 +180,16 @@ export function CartSheet({ open, onOpenChange, settings }: CartSheetProps) {
       // 1. Save order in Firebase (and local backup)
       await createOrderInFirebase(newOrder)
 
-      // 2. Generate Professional Invoice Text
+      // 2. Generate Professional Invoice Text with shipping and governorate
       const invoiceMessage = generateWhatsAppInvoiceMessage({
         orderId,
         pharmacyName: settings.pharmacyName || 'الصيدلية',
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim(),
+        customerAddress: customerAddress.trim(),
+        governorate: selectedGovernorate,
+        shippingCost,
+        subtotal,
         notes: notes.trim(),
         items: items.map((i) => ({
           productName: i.productName,
@@ -159,8 +197,8 @@ export function CartSheet({ open, onOpenChange, settings }: CartSheetProps) {
           unitPrice: i.price,
           totalPrice: i.price * i.quantity
         })),
-        totalAmount: total,
-        currency: settings.currency || 'ج.م'
+        totalAmount: grandTotal,
+        currency
       })
 
       // 3. Normalize WhatsApp phone number and build URL
@@ -181,6 +219,7 @@ export function CartSheet({ open, onOpenChange, settings }: CartSheetProps) {
       clearCart()
       setCustomerName('')
       setCustomerPhone('')
+      setCustomerAddress('')
       setNotes('')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'حدث خطأ أثناء إتمام الطلب')
@@ -284,7 +323,7 @@ export function CartSheet({ open, onOpenChange, settings }: CartSheetProps) {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-sm truncate text-slate-900">{item.productName}</p>
-                      <p className="text-emerald-600 text-xs font-semibold">{item.price} {settings.currency}</p>
+                      <p className="text-emerald-600 text-xs font-semibold">{item.price} {currency}</p>
                       <div className="flex items-center gap-2 mt-1.5">
                         <Button
                           variant="outline"
@@ -318,7 +357,7 @@ export function CartSheet({ open, onOpenChange, settings }: CartSheetProps) {
                       <span className="text-sm font-bold text-slate-900">
                         {(item.price * item.quantity).toFixed(2)}
                       </span>
-                      <span className="text-[11px] text-slate-500 block">{settings.currency}</span>
+                      <span className="text-[11px] text-slate-500 block">{currency}</span>
                     </div>
                   </div>
                 ))}
@@ -328,41 +367,105 @@ export function CartSheet({ open, onOpenChange, settings }: CartSheetProps) {
             <Separator className="my-2 bg-slate-200" />
 
             {/* Customer & Delivery Form */}
-            <div className="space-y-3 py-2">
-              <h3 className="font-bold text-sm text-slate-900">بيانات التوصيل والفاتورة</h3>
+            <div className="space-y-3.5 py-2">
+              <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-emerald-600" />
+                بيانات العميل ومكان التوصيل
+              </h3>
               
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="cust-name" className="text-xs font-semibold text-slate-700">اسم العميل *</Label>
+                  <Input
+                    id="cust-name"
+                    placeholder="مثال: أحمد محمد"
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    className="h-10 text-sm bg-white border-slate-300 text-slate-900"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="cust-phone" className="text-xs font-semibold text-slate-700">رقم الهاتف للتواصل *</Label>
+                  <Input
+                    id="cust-phone"
+                    placeholder="مثال: 01012345678"
+                    value={customerPhone}
+                    onChange={(e) => setCustomerPhone(e.target.value)}
+                    dir="ltr"
+                    className="h-10 text-sm bg-white border-slate-300 text-slate-900"
+                  />
+                </div>
+              </div>
+
+              {/* Governorate Dropdown Selector (Requested by User) */}
+              <div className="space-y-1.5 bg-emerald-50/60 p-3 rounded-xl border border-emerald-200">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="cust-gov" className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                    <Truck className="h-3.5 w-3.5 text-emerald-600" />
+                    المحافظة (لتحديد تكلفة الشحن) *
+                  </Label>
+                  <div className="flex items-center gap-1">
+                    {isFreeShipping ? (
+                      <Badge className="bg-emerald-600 text-white text-[11px] font-bold">
+                        🎉 شحن مجاني
+                      </Badge>
+                    ) : (
+                      <span className="text-xs font-bold text-emerald-800 bg-white px-2 py-0.5 rounded-md border border-emerald-300">
+                        الشحن: {shippingCost} {currency}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <select
+                  id="cust-gov"
+                  value={selectedGovernorate}
+                  onChange={(e) => setSelectedGovernorate(e.target.value)}
+                  className="w-full h-10 px-3 rounded-lg border border-emerald-300 bg-white text-slate-900 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-xs"
+                >
+                  {EGYPTIAN_GOVERNORATES.map((gov) => {
+                    const cost = shippingRates[gov.name] ?? gov.defaultCost
+                    return (
+                      <option key={gov.id} value={gov.name}>
+                        {gov.name} — (شحن {cost} {currency})
+                      </option>
+                    )
+                  })}
+                </select>
+                
+                {settings.freeShippingThreshold && settings.freeShippingThreshold > 0 && !isFreeShipping && (
+                  <p className="text-[11px] text-emerald-700 flex items-center gap-1 mt-1">
+                    <Gift className="h-3 w-3 inline text-emerald-600" />
+                    <span>
+                      أضف منتجات بقيمة {(settings.freeShippingThreshold - subtotal).toFixed(2)} {currency} إضافية للحصول على <strong>شحن مجاني</strong>!
+                    </span>
+                  </p>
+                )}
+              </div>
+
+              {/* Detailed Address */}
               <div className="space-y-1">
-                <Label htmlFor="cust-name" className="text-xs font-semibold text-slate-700">اسم العميل *</Label>
+                <Label htmlFor="cust-address" className="text-xs font-semibold text-slate-700">العنوان بالتفصيل</Label>
                 <Input
-                  id="cust-name"
-                  placeholder="مثال: أحمد محمد"
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
+                  id="cust-address"
+                  placeholder="اسم الشارع، رقم العمارة، الشقة، المنطقة..."
+                  value={customerAddress}
+                  onChange={(e) => setCustomerAddress(e.target.value)}
                   className="h-10 text-sm bg-white border-slate-300 text-slate-900"
                 />
               </div>
 
+              {/* Notes */}
               <div className="space-y-1">
-                <Label htmlFor="cust-phone" className="text-xs font-semibold text-slate-700">رقم الهاتف للتواصل *</Label>
-                <Input
-                  id="cust-phone"
-                  placeholder="مثال: 01012345678"
-                  value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value)}
-                  dir="ltr"
-                  className="h-10 text-sm bg-white border-slate-300 text-slate-900"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label htmlFor="cust-notes" className="text-xs font-semibold text-slate-700">العنوان / ملاحظات إضافية</Label>
+                <Label htmlFor="cust-notes" className="text-xs font-semibold text-slate-700">ملاحظات إضافية (اختياري)</Label>
                 <Textarea
                   id="cust-notes"
-                  placeholder="العنوان بالتفصيل أو أي تعليمات للتوصيل..."
+                  placeholder="أي تعليمات صيدلانية أو موعد مفضل للتسليم..."
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   rows={2}
-                  className="text-sm resize-none bg-white border-slate-300 text-slate-900"
+                  className="text-xs resize-none bg-white border-slate-300 text-slate-900"
                 />
               </div>
 
@@ -394,12 +497,43 @@ export function CartSheet({ open, onOpenChange, settings }: CartSheetProps) {
 
             <Separator className="my-2 bg-slate-200" />
 
+            {/* Price Breakdown (Requested: Shows transparently what the customer will pay) */}
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2">
+              <div className="flex items-center justify-between text-xs text-slate-600">
+                <span>إجمالي سعر الأدوية والمنتجات:</span>
+                <span className="font-semibold text-slate-900 font-mono">
+                  {subtotal.toFixed(2)} {currency}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between text-xs text-slate-600">
+                <span className="flex items-center gap-1">
+                  <Truck className="h-3.5 w-3.5 text-slate-500" />
+                  تكلفة الشحن ({selectedGovernorate}):
+                </span>
+                {isFreeShipping ? (
+                  <span className="font-bold text-emerald-700">مجاناً (عرض التوصيل)</span>
+                ) : (
+                  <span className="font-semibold text-slate-900 font-mono">
+                    {shippingCost.toFixed(2)} {currency}
+                  </span>
+                )}
+              </div>
+
+              <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
+                <span className="text-sm font-bold text-slate-900">المبلغ النهائي المطلوب للدفع:</span>
+                <span className="text-lg font-extrabold text-emerald-700 font-mono">
+                  {grandTotal.toFixed(2)} {currency}
+                </span>
+              </div>
+            </div>
+
             {/* WhatsApp Target Notification */}
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+            <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-emerald-900 font-semibold flex items-center gap-1.5">
                   <MessageCircle className="h-4 w-4 text-emerald-600" />
-                  إرسال لواتساب: <strong>{settings.pharmacyName}</strong>
+                  إرسال الفاتورة لواتساب: <strong>{settings.pharmacyName}</strong>
                 </span>
                 <span className="font-mono text-emerald-800 font-bold" dir="ltr">
                   +{normalizedTarget || 'لم يحدد'}
@@ -407,16 +541,16 @@ export function CartSheet({ open, onOpenChange, settings }: CartSheetProps) {
               </div>
               <p className="text-[11px] text-emerald-700 mt-1 flex items-center gap-1">
                 {isMobile ? <Smartphone className="h-3.5 w-3.5 inline" /> : <Monitor className="h-3.5 w-3.5 inline" />}
-                <span>سيتم فتح تطبيق واتساب وإرسال تفاصيل الفاتورة كاملة ومباشرة</span>
+                <span>سيتم فتح تطبيق واتساب ومرفق به تفاصيل الفاتورة كاملة وقيمة الشحن للمحافظة</span>
               </p>
             </div>
 
             {/* Footer / Total & Checkout Button */}
             <SheetFooter className="flex-col sm:flex-row gap-3 pt-3 border-t border-slate-200 mt-auto">
               <div className="flex items-center justify-between sm:flex-col sm:items-start w-full sm:w-auto">
-                <span className="text-xs text-slate-500 font-medium">الإجمالي الكلي</span>
+                <span className="text-xs text-slate-500 font-medium">الإجمالي الكلي بالشحن</span>
                 <span className="text-2xl font-bold text-emerald-600">
-                  {total.toFixed(2)} <span className="text-xs font-normal text-slate-600">{settings.currency}</span>
+                  {grandTotal.toFixed(2)} <span className="text-xs font-normal text-slate-600">{currency}</span>
                 </span>
               </div>
               <Button

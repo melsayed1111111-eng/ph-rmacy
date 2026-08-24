@@ -49,6 +49,7 @@ export function SettingsDialog({
   const [adminUsername, setAdminUsername] = useState('admin')
   const [adminPassword, setAdminPassword] = useState('admin123')
   const [showPassword, setShowPassword] = useState(false)
+  const [freeThreshold, setFreeThreshold] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
 
@@ -58,6 +59,9 @@ export function SettingsDialog({
     setCurrency(settings.currency || 'ج.م')
     setAdminUsername(settings.adminUsername || 'admin')
     setAdminPassword(settings.adminPassword || 'admin123')
+    setFreeThreshold(
+      settings.freeShippingThreshold ? String(settings.freeShippingThreshold) : ''
+    )
     setSaveSuccess(false)
 
     try {
@@ -107,8 +111,9 @@ export function SettingsDialog({
     try {
       const primaryNumber = whatsapp.trim() || (whatsappEntries[0]?.number.trim() || '')
       const cleanedEntries = whatsappEntries.filter((e) => e.number.trim())
+      const thresholdNum = parseFloat(freeThreshold)
 
-      const payload = {
+      const payload: PharmacySettings = {
         id: settings.id || 'default',
         pharmacyName: name.trim() || 'الصيدلية',
         whatsappNumber: primaryNumber,
@@ -116,6 +121,9 @@ export function SettingsDialog({
         currency: currency.trim() || 'ج.م',
         adminUsername: adminUsername.trim() || 'admin',
         adminPassword: adminPassword.trim() || 'admin123',
+        shippingRates: settings.shippingRates,
+        defaultShippingCost: settings.defaultShippingCost,
+        freeShippingThreshold: !isNaN(thresholdNum) && thresholdNum > 0 ? thresholdNum : 0
       }
 
       await saveSettingsToFirebase(payload)

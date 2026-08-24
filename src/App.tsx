@@ -15,7 +15,8 @@ import {
   ShieldCheck,
   CheckCircle2,
   Flame,
-  Zap
+  Zap,
+  Truck
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -25,6 +26,7 @@ import { CartSheet } from '@/components/store/cart-sheet'
 import { ProductsManager } from '@/components/admin/products-manager'
 import { InventoryManager } from '@/components/admin/inventory-manager'
 import { OrdersManager } from '@/components/admin/orders-manager'
+import { ShippingManager } from '@/components/admin/shipping-manager'
 import { ReportsManager } from '@/components/admin/reports-manager'
 import { SettingsDialog } from '@/components/admin/settings-dialog'
 import { LoginDialog } from '@/components/admin/login-dialog'
@@ -54,7 +56,7 @@ export default function App() {
   const [cartOpen, setCartOpen] = useState(false)
   const [loginOpen, setLoginOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [adminTab, setAdminTab] = useState<'products' | 'inventory' | 'orders' | 'reports'>('products')
+  const [adminTab, setAdminTab] = useState<'products' | 'inventory' | 'orders' | 'shipping' | 'reports'>('products')
   const [viewMode, setViewMode] = useState<'store' | 'admin'>('store')
   const [firebaseConnected, setFirebaseConnected] = useState(true)
 
@@ -79,6 +81,9 @@ export default function App() {
     const unsubscribeSettings = subscribeToSettings((realtimeSettings) => {
       if (isMounted && realtimeSettings) {
         setSettings(realtimeSettings)
+        if (realtimeSettings.pharmacyName) {
+          document.title = `${realtimeSettings.pharmacyName} | طلب أدوية ومستلزمات طبية وتوصيل للمنازل`
+        }
       }
     })
 
@@ -271,6 +276,10 @@ export default function App() {
                   <FileSpreadsheet className="h-4 w-4" />
                   الطلبات والفواتير
                 </TabsTrigger>
+                <TabsTrigger value="shipping" className="text-xs gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
+                  <Truck className="h-4 w-4" />
+                  أسعار الشحن والمحافظات
+                </TabsTrigger>
                 <TabsTrigger value="reports" className="text-xs gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
                   <BarChart3 className="h-4 w-4" />
                   التقارير
@@ -287,8 +296,11 @@ export default function App() {
                 <TabsContent value="orders">
                   <OrdersManager currency={settings.currency || 'ج.م'} settings={settings} />
                 </TabsContent>
+                <TabsContent value="shipping">
+                  <ShippingManager settings={settings} onSaveSettings={handleSaveSettings} />
+                </TabsContent>
                 <TabsContent value="reports">
-                  <ReportsManager currency={settings.currency || 'ج.م'} />
+                  <ReportsManager currency={settings.currency || 'ج.م'} settings={settings} />
                 </TabsContent>
               </div>
             </Tabs>

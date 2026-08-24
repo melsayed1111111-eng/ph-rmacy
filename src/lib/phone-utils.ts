@@ -103,6 +103,10 @@ export interface InvoiceData {
   pharmacyName: string
   customerName: string
   customerPhone: string
+  customerAddress?: string
+  governorate?: string
+  shippingCost?: number
+  subtotal?: number
   notes?: string
   items: InvoiceItem[]
   totalAmount: number
@@ -135,11 +139,17 @@ export function generateWhatsAppInvoiceMessage(data: InvoiceData): string {
   msg += `📅 *التاريخ:* ${formattedDate} (${formattedTime})\n`
   msg += `━━━━━━━━━━━━━━━━━━━━━\n\n`
 
-  msg += `👤 *بيانات العميل:*\n`
+  msg += `👤 *بيانات العميل والتوصيل:*\n`
   msg += `• *الاسم:* ${data.customerName}\n`
   msg += `• *الهاتف:* ${data.customerPhone}\n`
+  if (data.governorate) {
+    msg += `• *المحافظة:* ${data.governorate}\n`
+  }
+  if (data.customerAddress && data.customerAddress.trim()) {
+    msg += `• *العنوان بالتفصيل:* ${data.customerAddress.trim()}\n`
+  }
   if (data.notes && data.notes.trim()) {
-    msg += `• *ملاحظات / العنوان:* ${data.notes.trim()}\n`
+    msg += `• *ملاحظات إضافية:* ${data.notes.trim()}\n`
   }
   msg += `\n━━━━━━━━━━━━━━━━━━━━━\n`
   msg += `📦 *الأصناف والمنتجات:*\n`
@@ -151,7 +161,18 @@ export function generateWhatsAppInvoiceMessage(data: InvoiceData): string {
   })
 
   msg += `━━━━━━━━━━━━━━━━━━━━━\n`
-  msg += `💰 *الإجمالي النهائي: ${data.totalAmount.toFixed(2)} ${data.currency}*\n`
+  msg += `💵 *تفاصيل الحساب والفاتورة:*\n`
+  if (typeof data.subtotal === 'number') {
+    msg += `• *إجمالي المنتجات:* ${data.subtotal.toFixed(2)} ${data.currency}\n`
+  }
+  if (typeof data.shippingCost === 'number') {
+    if (data.shippingCost === 0 && data.governorate) {
+      msg += `• *تكلفة الشحن (${data.governorate}):* 🎁 مجاناً\n`
+    } else {
+      msg += `• *تكلفة الشحن (${data.governorate || 'التوصيل'}):* ${data.shippingCost.toFixed(2)} ${data.currency}\n`
+    }
+  }
+  msg += `💰 *الإجمالي النهائي المطلوب: ${data.totalAmount.toFixed(2)} ${data.currency}*\n`
   msg += `━━━━━━━━━━━━━━━━━━━━━\n\n`
   msg += `✨ _شكراً لتعاملكم مع ${data.pharmacyName}_\n`
   msg += `_تم إنشاء الفاتورة وإرسالها عبر النظام الذكي_`
