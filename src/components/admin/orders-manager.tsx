@@ -347,7 +347,7 @@ export function OrdersManager({ currency, settings }: OrdersManagerProps) {
                 </div>
                 {selectedOrder.governorate && (
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">المحافظة:</span>
+                    <span className="text-muted-foreground">المنطقة / المحافظة:</span>
                     <span className="font-bold text-slate-800 bg-emerald-100/70 text-emerald-900 px-2 py-0.5 rounded">
                       {selectedOrder.governorate}
                     </span>

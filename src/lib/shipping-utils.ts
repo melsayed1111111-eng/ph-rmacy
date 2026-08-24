@@ -4,6 +4,13 @@ export interface GovernorateInfo {
   defaultCost: number
 }
 
+export interface ShippingAreaItem {
+  id: string
+  name: string
+  cost: number
+  isCustom?: boolean
+}
+
 export const EGYPTIAN_GOVERNORATES: GovernorateInfo[] = [
   { id: 'cairo', name: 'القاهرة', defaultCost: 30 },
   { id: 'giza', name: 'الجيزة', defaultCost: 30 },
@@ -46,42 +53,86 @@ export function getDefaultShippingRates(): Record<string, number> {
 }
 
 /**
- * Parses shipping rates JSON or returns default Egyptian rates
+ * Returns default shipping areas as ShippingAreaItem list
  */
-export function parseShippingRates(rawJson?: string): Record<string, number> {
-  const defaultRates = getDefaultShippingRates()
-  if (!rawJson) return defaultRates
-
-  try {
-    const parsed = JSON.parse(rawJson)
-    if (typeof parsed === 'object' && parsed !== null) {
-      // Merge with defaults so all governorates always exist
-      return { ...defaultRates, ...parsed }
-    }
-  } catch (err) {
-    console.error('Error parsing shipping rates JSON:', err)
-  }
-
-  return defaultRates
+export function getDefaultShippingAreas(): ShippingAreaItem[] {
+  return EGYPTIAN_GOVERNORATES.map((g) => ({
+    id: g.id,
+    name: g.name,
+    cost: g.defaultCost,
+    isCustom: false
+  }))
 }
 
 /**
- * Calculates shipping cost for a given governorate and order subtotal
+ * Parses shipping rates JSON or returns default Egyptian rates as an Area List
+ */
+export function getShippingAreasList(rawJson?: string): ShippingAreaItem[] {
+  if (!rawJson) return getDefaultShippingAreas()
+
+  try {
+    const parsed = JSON.parse(rawJson)
+    // 1. If stored as an array of objects [{ id, name, cost }]
+    if (Array.isArray(parsed)) {
+      return parsed.map((item, idx) => ({
+        id: item.id || `area-${idx}-${Date.now()}`,
+        name: String(item.name || '').trim(),
+        cost: typeof item.cost === 'number' ? item.cost : parseFloat(item.cost) || 0,
+        isCustom: item.isCustom ?? true
+      })).filter((item) => item.name.length > 0)
+    }
+
+    // 2. If stored as an object Record<string, number>
+    if (typeof parsed === 'object' && parsed !== null) {
+      const entries = Object.entries(parsed)
+      if (entries.length > 0) {
+        return entries.map(([name, cost], idx) => {
+          const govMatch = EGYPTIAN_GOVERNORATES.find((g) => g.name === name)
+          return {
+            id: govMatch ? govMatch.id : `area-custom-${idx}`,
+            name,
+            cost: typeof cost === 'number' ? cost : parseFloat(String(cost)) || 0,
+            isCustom: !govMatch
+          }
+        })
+      }
+    }
+  } catch (err) {
+    console.error('Error parsing shipping areas JSON:', err)
+  }
+
+  return getDefaultShippingAreas()
+}
+
+/**
+ * Parses shipping rates JSON into a Record<string, number> map
+ */
+export function parseShippingRates(rawJson?: string): Record<string, number> {
+  const areas = getShippingAreasList(rawJson)
+  const map: Record<string, number> = {}
+  areas.forEach((area) => {
+    map[area.name] = area.cost
+  })
+  return map
+}
+
+/**
+ * Calculates shipping cost for a given area/governorate and order subtotal
  */
 export function calculateShippingFee(
-  governorate: string,
+  areaOrGovernorate: string,
   subtotal: number,
   shippingRates: Record<string, number>,
   freeShippingThreshold?: number,
   defaultShippingCost = 35
 ): { cost: number; isFree: boolean; originalCost: number } {
-  if (!governorate) {
+  if (!areaOrGovernorate) {
     return { cost: 0, isFree: false, originalCost: 0 }
   }
 
   const configuredCost =
-    typeof shippingRates[governorate] === 'number'
-      ? shippingRates[governorate]
+    typeof shippingRates[areaOrGovernorate] === 'number'
+      ? shippingRates[areaOrGovernorate]
       : defaultShippingCost
 
   if (

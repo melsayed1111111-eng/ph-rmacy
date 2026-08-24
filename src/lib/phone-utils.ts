@@ -143,7 +143,7 @@ export function generateWhatsAppInvoiceMessage(data: InvoiceData): string {
   msg += `• *الاسم:* ${data.customerName}\n`
   msg += `• *الهاتف:* ${data.customerPhone}\n`
   if (data.governorate) {
-    msg += `• *المحافظة:* ${data.governorate}\n`
+    msg += `• *المنطقة / المحافظة:* ${data.governorate}\n`
   }
   if (data.customerAddress && data.customerAddress.trim()) {
     msg += `• *العنوان بالتفصيل:* ${data.customerAddress.trim()}\n`

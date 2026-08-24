@@ -40,7 +40,7 @@ import {
   buildWhatsAppUrl
 } from '@/lib/phone-utils'
 import {
-  EGYPTIAN_GOVERNORATES,
+  getShippingAreasList,
   parseShippingRates,
   calculateShippingFee
 } from '@/lib/shipping-utils'
@@ -82,10 +82,23 @@ export function CartSheet({ open, onOpenChange, settings }: CartSheetProps) {
     return items.reduce((acc, item) => acc + item.quantity, 0)
   }, [items])
 
-  // Parse shipping rates
+  // Parse shipping rates & area list
+  const shippingAreas = useMemo(() => {
+    return getShippingAreasList(settings.shippingRates)
+  }, [settings.shippingRates])
+
   const shippingRates = useMemo(() => {
     return parseShippingRates(settings.shippingRates)
   }, [settings.shippingRates])
+
+  // Ensure selected governorate/area is valid
+  useEffect(() => {
+    if (shippingAreas.length > 0) {
+      if (!selectedGovernorate || !shippingAreas.some((a) => a.name === selectedGovernorate)) {
+        setSelectedGovernorate(shippingAreas[0].name)
+      }
+    }
+  }, [shippingAreas, selectedGovernorate])
 
   // Calculate live shipping cost
   const { cost: shippingCost, isFree: isFreeShipping } = useMemo(() => {
@@ -473,7 +486,7 @@ export function CartSheet({ open, onOpenChange, settings }: CartSheetProps) {
                 <div className="flex items-center justify-between">
                   <Label htmlFor="cust-gov" className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
                     <Truck className="h-3.5 w-3.5 text-emerald-600" />
-                    المحافظة (لتحديد تكلفة الشحن) *
+                    منطقة / محافظة التوصيل (لتحديد تكلفة الشحن) *
                   </Label>
                   <div>
                     {isFreeShipping ? (
@@ -494,11 +507,11 @@ export function CartSheet({ open, onOpenChange, settings }: CartSheetProps) {
                   onChange={(e) => setSelectedGovernorate(e.target.value)}
                   className="w-full h-10 px-3 rounded-xl border border-emerald-300 bg-white text-slate-900 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-2xs"
                 >
-                  {EGYPTIAN_GOVERNORATES.map((gov) => {
-                    const cost = shippingRates[gov.name] ?? gov.defaultCost
+                  {shippingAreas.map((area) => {
+                    const cost = shippingRates[area.name] ?? area.cost
                     return (
-                      <option key={gov.id} value={gov.name}>
-                        {gov.name} — (شحن {cost} {currency})
+                      <option key={area.id} value={area.name}>
+                        {area.name} — (شحن {cost} {currency})
                       </option>
                     )
                   })}
