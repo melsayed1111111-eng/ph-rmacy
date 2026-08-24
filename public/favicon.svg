@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="100%" height="100%">
+  <defs>
+    <linearGradient id="pharmacyGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#047857" />
+    </linearGradient>
+    <filter id="subtleShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#064e3b" flood-opacity="0.25" />
+    </filter>
+  </defs>
+
+  <!-- Background Rounded Square with Glow -->
+  <rect x="8" y="8" width="112" height="112" rx="28" fill="url(#pharmacyGradient)" filter="url(#subtleShadow)" />
+  
+  <!-- Subtle inner border for premium badge look -->
+  <rect x="10" y="10" width="108" height="108" rx="26" fill="none" stroke="#ffffff" stroke-width="2" stroke-opacity="0.3" />
+
+  <!-- Pharmacy Medical Cross -->
+  <g fill="#ffffff">
+    <!-- Vertical bar -->
+    <rect x="52" y="28" width="24" height="72" rx="7" />
+    <!-- Horizontal bar -->
+    <rect x="28" y="52" width="72" height="24" rx="7" />
+  </g>
+
+  <!-- Centered Medical Heartbeat / Pill Accent -->
+  <circle cx="64" cy="64" r="7" fill="#059669" />
+  <circle cx="64" cy="64" r="3.5" fill="#ffffff" />
+</svg>

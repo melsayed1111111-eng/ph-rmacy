@@ -68,6 +68,17 @@ export default function App() {
   useEffect(() => {
     let isMounted = true
 
+    // Set initial title and favicon
+    document.title = `${settings.pharmacyName || 'صيدلية الشفاء أونلاين'} | طلب أدوية ومستلزمات طبية`
+    let faviconLink = document.querySelector("link[rel~='icon']") as HTMLLinkElement
+    if (!faviconLink) {
+      faviconLink = document.createElement('link')
+      faviconLink.rel = 'icon'
+      faviconLink.type = 'image/svg+xml'
+      document.head.appendChild(faviconLink)
+    }
+    faviconLink.href = '/favicon.svg'
+
     // 1. Subscribe to active products in real-time
     const unsubscribeProducts = subscribeToProducts((realtimeProducts) => {
       if (isMounted) {
