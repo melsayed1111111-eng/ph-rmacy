@@ -14,10 +14,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Plus, Pencil, Trash2, Search, Package, ToggleLeft, ToggleRight } from 'lucide-react'
+import { Plus, Pencil, Trash2, Search, Package, ToggleLeft, ToggleRight, Zap } from 'lucide-react'
 import Image from '@/components/common/Image'
 import { ProductFormDialog, type ProductFormData } from './product-form-dialog'
-import type { Product } from '@/lib/types'
+import {
+  subscribeToProducts,
+  saveProductToFirebase,
+  deleteProductFromFirebase
+} from '@/lib/firebase'
+import type { Product, ProductImage } from '@/lib/types'
 
 const CATEGORIES = ['أدوية', 'فيتامينات', 'عناية شخصية', 'مستلزمات طبية', 'أخرى']
 
@@ -30,23 +35,15 @@ export function ProductsManager({ currency }: { currency: string }) {
   const [deleteProduct, setDeleteProduct] = useState<Product | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  const refreshProducts = useCallback(async () => {
-    try {
-      const res = await fetch('/api/products?active=false')
-      if (res.ok) {
-        const data = await res.json()
-        setAllProducts(data)
-      }
-    } catch (error) {
-      console.error('Error fetching products:', error)
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
-
   useEffect(() => {
-    refreshProducts()
-  }, [refreshProducts])
+    // Realtime subscription to all products (including inactive)
+    const unsubscribe = subscribeToProducts((products) => {
+      setAllProducts(products)
+      setIsLoading(false)
+    }, false)
+
+    return () => unsubscribe()
+  }, [])
 
   const filteredProducts = useMemo(() => {
     return allProducts.filter((product) => {
@@ -71,29 +68,31 @@ export function ProductsManager({ currency }: { currency: string }) {
 
   const handleSave = async (data: ProductFormData) => {
     try {
-      const payload = {
+      const productId = editProduct ? editProduct.id : `prod-${Date.now()}`
+      const imageList: ProductImage[] = Array.isArray(data.images)
+        ? data.images.map((url: string, idx: number) => ({
+            id: `img-${Date.now()}-${idx}`,
+            productId,
+            url,
+            sortOrder: idx
+          }))
+        : []
+
+      const productPayload: Product = {
+        id: productId,
         name: data.name,
-        description: data.description,
-        price: parseFloat(data.price),
+        description: data.description || '',
+        price: parseFloat(data.price) || 0,
         stock: parseInt(data.stock, 10) || 0,
-        category: data.category,
-        images: data.images
+        category: data.category || 'أخرى',
+        isActive: editProduct ? editProduct.isActive : true,
+        createdAt: editProduct ? editProduct.createdAt : new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        images: imageList
       }
 
-      if (editProduct) {
-        await fetch(`/api/products/${editProduct.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        })
-      } else {
-        await fetch('/api/products', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        })
-      }
-      await refreshProducts()
+      await saveProductToFirebase(productPayload)
+      setFormOpen(false)
     } catch (error) {
       console.error('Error saving product:', error)
     }
@@ -102,11 +101,8 @@ export function ProductsManager({ currency }: { currency: string }) {
   const handleDelete = async () => {
     if (!deleteProduct) return
     try {
-      await fetch(`/api/products/${deleteProduct.id}`, {
-        method: 'DELETE'
-      })
+      await deleteProductFromFirebase(deleteProduct.id)
       setDeleteProduct(null)
-      await refreshProducts()
     } catch (error) {
       console.error('Error deleting product:', error)
     }
@@ -114,14 +110,12 @@ export function ProductsManager({ currency }: { currency: string }) {
 
   const toggleActive = async (product: Product) => {
     try {
-      const res = await fetch(`/api/products/${product.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isActive: !product.isActive })
-      })
-      if (res.ok) {
-        await refreshProducts()
+      const updated: Product = {
+        ...product,
+        isActive: !product.isActive,
+        updatedAt: new Date().toISOString()
       }
+      await saveProductToFirebase(updated)
     } catch (error) {
       console.error('Error toggling product:', error)
     }

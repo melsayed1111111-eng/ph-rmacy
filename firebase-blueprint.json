@@ -1,0 +1,67 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "A pharmacy product or medicine",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 1000 },
+        "price": { "type": "number" },
+        "stock": { "type": "number" },
+        "category": { "type": "string", "maxLength": 100 },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "images": { "type": "array" }
+      },
+      "required": ["id", "name", "price", "stock", "category"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Customer order with invoice items",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerName": { "type": "string", "maxLength": 150 },
+        "customerPhone": { "type": "string", "maxLength": 50 },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "preparing", "ready", "delivered", "cancelled"] },
+        "totalAmount": { "type": "number" },
+        "notes": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "items": { "type": "array" }
+      },
+      "required": ["id", "customerName", "customerPhone", "status", "totalAmount", "items"]
+    },
+    "Settings": {
+      "title": "PharmacySettings",
+      "description": "Configuration and WhatsApp contact numbers",
+      "type": "object",
+      "properties": {
+        "pharmacyName": { "type": "string" },
+        "whatsappNumber": { "type": "string" },
+        "whatsappNumbers": { "type": "string" },
+        "currency": { "type": "string" },
+        "adminUsername": { "type": "string" },
+        "adminPassword": { "type": "string" }
+      },
+      "required": ["pharmacyName", "whatsappNumber", "currency"]
+    }
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Collection of all pharmacy products and inventory"
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Collection of customer orders and checkout requests"
+    },
+    "/settings/{settingsId}": {
+      "schema": "Settings",
+      "description": "Global pharmacy and store settings"
+    }
+  }
+}

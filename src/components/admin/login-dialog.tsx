@@ -9,7 +9,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Lock, User, Eye, EyeOff, AlertCircle } from 'lucide-react'
+import { Lock, User, Eye, EyeOff, AlertCircle, KeyRound, Info } from 'lucide-react'
 import { useAuthStore } from '@/store/auth-store'
 
 interface LoginDialogProps {
@@ -18,8 +18,8 @@ interface LoginDialogProps {
 }
 
 export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
+  const [username, setUsername] = useState('admin')
+  const [password, setPassword] = useState('admin123')
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
@@ -43,8 +43,6 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
     try {
       const result = await login(username.trim(), password.trim())
       if (result.success) {
-        setUsername('')
-        setPassword('')
         onOpenChange(false)
       } else {
         setError(result.error || 'اسم المستخدم أو كلمة المرور غير صحيحة')
@@ -56,39 +54,66 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
     }
   }
 
+  const fillDefaultCredentials = () => {
+    setUsername('admin')
+    setPassword('admin123')
+    setError('')
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md p-6" dir="rtl">
-        <DialogHeader className="text-right">
-          <div className="mx-auto w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center mb-3">
-            <Lock className="h-6 w-6 text-emerald-600" />
+      <DialogContent className="sm:max-w-md p-6 bg-white text-slate-900 border border-slate-200 shadow-2xl rounded-2xl" dir="rtl">
+        <DialogHeader className="text-right space-y-2">
+          <div className="mx-auto w-14 h-14 rounded-2xl bg-emerald-100 border border-emerald-200 flex items-center justify-center mb-1 text-emerald-700 shadow-sm">
+            <Lock className="h-7 w-7" />
           </div>
-          <DialogTitle className="text-xl font-bold text-center">
+          <DialogTitle className="text-xl font-bold text-center text-slate-900">
             تسجيل الدخول للوحة التحكم
           </DialogTitle>
-          <DialogDescription className="text-center text-xs text-muted-foreground">
+          <DialogDescription className="text-center text-xs text-slate-500">
             أدخل بيانات الإدارة للوصول لإدارة المنتجات والطلبات والمخزون
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+        {/* Credentials Reminder Box */}
+        <div className="bg-emerald-50/90 border border-emerald-200 rounded-xl p-3 text-xs space-y-1.5 text-slate-800">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 font-semibold text-emerald-900">
+              <KeyRound className="h-4 w-4 text-emerald-700" />
+              <span>بيانات الدخول الافتراضية:</span>
+            </div>
+            <button
+              type="button"
+              onClick={fillDefaultCredentials}
+              className="text-[11px] font-medium text-emerald-700 hover:text-emerald-900 underline underline-offset-2"
+            >
+              تعبئة تلقائية
+            </button>
+          </div>
+          <div className="flex items-center justify-between text-slate-700 pt-1 font-mono text-[11px] bg-white/80 px-2.5 py-1.5 rounded-lg border border-emerald-100">
+            <span>المستخدم: <strong className="text-emerald-900 font-bold">admin</strong></span>
+            <span>كلمة المرور: <strong className="text-emerald-900 font-bold">admin123</strong></span>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4 pt-1">
           {error && (
-            <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/20 text-destructive text-xs rounded-lg">
+            <div className="flex items-center gap-2 p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
           <div className="space-y-1.5">
-            <Label htmlFor="login-username" className="text-xs font-medium">اسم المستخدم</Label>
+            <Label htmlFor="login-username" className="text-xs font-semibold text-slate-700">اسم المستخدم</Label>
             <div className="relative">
-              <User className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <User className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input
                 id="login-username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="admin"
-                className="pr-9"
+                className="pr-10 bg-white border-slate-300 text-slate-900 text-sm h-10"
                 dir="ltr"
                 autoComplete="username"
               />
@@ -96,23 +121,23 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="login-password" className="text-xs font-medium">كلمة المرور</Label>
+            <Label htmlFor="login-password" className="text-xs font-semibold text-slate-700">كلمة المرور</Label>
             <div className="relative">
-              <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input
                 id="login-password"
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="pr-9 pl-9"
+                className="pr-10 pl-10 bg-white border-slate-300 text-slate-900 text-sm h-10"
                 dir="ltr"
                 autoComplete="current-password"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-1"
               >
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
@@ -121,7 +146,7 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 
           <Button
             type="submit"
-            className="w-full bg-emerald-600 hover:bg-emerald-700 font-semibold"
+            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-11 text-sm rounded-xl shadow-md transition"
             disabled={isLoading}
           >
             {isLoading ? (
@@ -130,7 +155,7 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
                 جاري التحقق...
               </div>
             ) : (
-              'دخول'
+              'دخول للوحة الإدارة'
             )}
           </Button>
         </form>

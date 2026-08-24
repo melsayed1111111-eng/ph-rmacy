@@ -4,8 +4,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Warehouse, AlertTriangle, Save } from 'lucide-react'
+import { Warehouse, AlertTriangle, Save, Zap } from 'lucide-react'
 import Image from '@/components/common/Image'
+import { subscribeToProducts, updateProductStockInFirebase } from '@/lib/firebase'
 import type { Product } from '@/lib/types'
 
 export function InventoryManager({ currency }: { currency: string }) {
@@ -14,27 +15,18 @@ export function InventoryManager({ currency }: { currency: string }) {
   const [editingStock, setEditingStock] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState<string | null>(null)
 
-  const fetchProducts = async () => {
-    try {
-      const res = await fetch('/api/products?active=false')
-      if (res.ok) {
-        const data: Product[] = await res.json()
-        setProducts(data)
-        const initialStock: Record<string, string> = {}
-        data.forEach((p) => {
-          initialStock[p.id] = String(p.stock)
-        })
-        setEditingStock(initialStock)
-      }
-    } catch (error) {
-      console.error('Error fetching inventory:', error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
   useEffect(() => {
-    fetchProducts()
+    const unsubscribe = subscribeToProducts((data) => {
+      setProducts(data)
+      setIsLoading(false)
+      const initialStock: Record<string, string> = {}
+      data.forEach((p) => {
+        initialStock[p.id] = String(p.stock)
+      })
+      setEditingStock((prev) => ({ ...initialStock, ...prev }))
+    }, false)
+
+    return () => unsubscribe()
   }, [])
 
   const handleStockChange = (productId: string, value: string) => {
@@ -46,12 +38,7 @@ export function InventoryManager({ currency }: { currency: string }) {
     if (isNaN(newStock) || newStock < 0) return
     setSaving(productId)
     try {
-      await fetch(`/api/products/${productId}/stock`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stock: newStock })
-      })
-      await fetchProducts()
+      await updateProductStockInFirebase(productId, newStock)
     } catch (error) {
       console.error('Error updating stock:', error)
     } finally {

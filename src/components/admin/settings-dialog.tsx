@@ -26,6 +26,7 @@ import {
   AlertCircle
 } from 'lucide-react'
 import { normalizeWhatsAppNumber, buildWhatsAppUrl } from '@/lib/phone-utils'
+import { saveSettingsToFirebase } from '@/lib/firebase'
 import type { PharmacySettings, WhatsAppEntry } from '@/lib/types'
 
 interface SettingsDialogProps {
@@ -108,6 +109,7 @@ export function SettingsDialog({
       const cleanedEntries = whatsappEntries.filter((e) => e.number.trim())
 
       const payload = {
+        id: settings.id || 'default',
         pharmacyName: name.trim() || 'الصيدلية',
         whatsappNumber: primaryNumber,
         whatsappNumbers: JSON.stringify(cleanedEntries),
@@ -116,21 +118,13 @@ export function SettingsDialog({
         adminPassword: adminPassword.trim() || 'admin123',
       }
 
-      const res = await fetch('/api/settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-
-      if (res.ok) {
-        const updated = await res.json()
-        onSave(updated)
-        setSaveSuccess(true)
-        setTimeout(() => {
-          setSaveSuccess(false)
-          onOpenChange(false)
-        }, 1000)
-      }
+      await saveSettingsToFirebase(payload)
+      onSave(payload)
+      setSaveSuccess(true)
+      setTimeout(() => {
+        setSaveSuccess(false)
+        onOpenChange(false)
+      }, 1000)
     } catch (error) {
       console.error('Error saving settings:', error)
     } finally {

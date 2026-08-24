@@ -13,7 +13,9 @@ import {
   MessageCircle,
   Phone,
   ShieldCheck,
-  CheckCircle2
+  CheckCircle2,
+  Flame,
+  Zap
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -29,6 +31,12 @@ import { LoginDialog } from '@/components/admin/login-dialog'
 import { useAuthStore } from '@/store/auth-store'
 import { useCartStore } from '@/store/cart-store'
 import { normalizeWhatsAppNumber } from '@/lib/phone-utils'
+import {
+  subscribeToProducts,
+  subscribeToSettings,
+  seedFirebaseIfEmpty,
+  saveSettingsToFirebase
+} from '@/lib/firebase'
 import type { Product, PharmacySettings } from '@/lib/types'
 
 export default function App() {
@@ -48,49 +56,67 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [adminTab, setAdminTab] = useState<'products' | 'inventory' | 'orders' | 'reports'>('products')
   const [viewMode, setViewMode] = useState<'store' | 'admin'>('store')
+  const [firebaseConnected, setFirebaseConnected] = useState(true)
 
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const logout = useAuthStore((s) => s.logout)
   const totalCartItems = useCartStore((s) => s.getTotalItems())
 
-  // Fetch store data
-  const fetchData = useCallback(async () => {
-    try {
-      const [prodRes, settRes] = await Promise.all([
-        fetch('/api/products?active=true'),
-        fetch('/api/settings')
-      ])
+  // Realtime Firebase Subscriptions for Instant Data
+  useEffect(() => {
+    let isMounted = true
 
-      if (prodRes.ok) {
-        const prodData = await prodRes.json()
-        setProducts(prodData)
+    // 1. Subscribe to active products in real-time
+    const unsubscribeProducts = subscribeToProducts((realtimeProducts) => {
+      if (isMounted) {
+        setProducts(realtimeProducts)
+        setIsLoading(false)
+        setFirebaseConnected(true)
       }
+    }, true)
 
-      if (settRes.ok) {
-        const settData = await settRes.json()
-        setSettings(settData)
+    // 2. Subscribe to settings in real-time
+    const unsubscribeSettings = subscribeToSettings((realtimeSettings) => {
+      if (isMounted && realtimeSettings) {
+        setSettings(realtimeSettings)
       }
-    } catch (err) {
-      console.error('Error fetching initial data:', err)
-    } finally {
-      setIsLoading(false)
+    })
+
+    // 3. Check and seed initial products to Firebase if database is new
+    fetch('/api/products?active=false')
+      .then((res) => res.json())
+      .then((initialProducts) => {
+        if (Array.isArray(initialProducts) && initialProducts.length > 0) {
+          seedFirebaseIfEmpty(initialProducts, settings)
+        }
+      })
+      .catch(() => {})
+
+    return () => {
+      isMounted = false
+      unsubscribeProducts()
+      unsubscribeSettings()
     }
   }, [])
 
-  useEffect(() => {
-    fetchData()
-  }, [fetchData])
-
   const normalizedWhatsApp = normalizeWhatsAppNumber(settings.whatsappNumber)
+
+  const handleSaveSettings = async (newSettings: PharmacySettings) => {
+    setSettings(newSettings)
+    await saveSettingsToFirebase(newSettings)
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans" dir="rtl">
       {/* Top Announcement / Info Bar */}
       <div className="bg-emerald-900 text-emerald-100 text-xs py-1.5 px-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
+        <div className="max-w-7xl mx-auto flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>نظام الطلب والفواتير التلقائي متصل ومفعل عبر الواتساب</span>
+            <span className="flex items-center gap-1.5 font-medium">
+              <Zap className="h-3.5 w-3.5 text-amber-400" />
+              قاعدة بيانات Firebase متصلة بالكامل (pharmacy-89268) — تحديثات وبيانات مباشرة وفورية
+            </span>
           </div>
           {normalizedWhatsApp && (
             <a
@@ -348,7 +374,7 @@ export default function App() {
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
         settings={settings}
-        onSave={(updated) => setSettings(updated)}
+        onSave={handleSaveSettings}
       />
     </div>
   )

@@ -33,7 +33,8 @@ import {
   openWhatsApp,
   buildWhatsAppUrl
 } from '@/lib/phone-utils'
-import type { PharmacySettings, WhatsAppEntry } from '@/lib/types'
+import { createOrderInFirebase } from '@/lib/firebase'
+import type { PharmacySettings, WhatsAppEntry, Order } from '@/lib/types'
 
 interface CartSheetProps {
   open: boolean
@@ -120,32 +121,30 @@ export function CartSheet({ open, onOpenChange, settings }: CartSheetProps) {
 
     setIsSubmitting(true)
     try {
-      const orderData = {
+      const orderId = `order-${Date.now()}`
+      const newOrder: Order = {
+        id: orderId,
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim(),
-        items: items.map((item) => ({
+        status: 'pending',
+        totalAmount: total,
+        notes: notes.trim(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        items: items.map((item, idx) => ({
+          id: `item-${Date.now()}-${idx}`,
+          orderId,
           productId: item.productId,
           productName: item.productName,
           quantity: item.quantity,
-          unitPrice: item.price
-        })),
-        notes: notes.trim()
+          unitPrice: item.price,
+          totalPrice: item.price * item.quantity,
+          productImage: item.image
+        }))
       }
 
-      // 1. Save order in the database
-      const res = await fetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(orderData)
-      })
-
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'فشل في حفظ الطلب')
-      }
-
-      const createdOrder = await res.json()
-      const orderId = createdOrder.id || ''
+      // 1. Save order in Firebase (and local backup)
+      await createOrderInFirebase(newOrder)
 
       // 2. Generate Professional Invoice Text
       const invoiceMessage = generateWhatsAppInvoiceMessage({
@@ -200,9 +199,9 @@ export function CartSheet({ open, onOpenChange, settings }: CartSheetProps) {
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-lg flex flex-col p-6 overflow-y-auto" dir="rtl">
-        <SheetHeader className="text-right">
-          <SheetTitle className="flex items-center gap-2 text-lg font-bold">
+      <SheetContent className="w-full sm:max-w-lg flex flex-col p-6 overflow-y-auto bg-white text-slate-900 border-l border-slate-200 shadow-2xl" dir="rtl">
+        <SheetHeader className="text-right pb-2 border-b border-slate-100">
+          <SheetTitle className="flex items-center gap-2 text-lg font-bold text-slate-900">
             <ShoppingBag className="h-5 w-5 text-emerald-600" />
             سلة التسوق ({items.length} منتج)
           </SheetTitle>
@@ -244,7 +243,7 @@ export function CartSheet({ open, onOpenChange, settings }: CartSheetProps) {
 
               <Button
                 variant="outline"
-                className="w-full flex items-center justify-center gap-2 text-xs"
+                className="w-full flex items-center justify-center gap-2 text-xs bg-white text-slate-800 border-slate-300"
                 onClick={handleCopyMessage}
               >
                 <Copy className="h-3.5 w-3.5" />
@@ -269,8 +268,8 @@ export function CartSheet({ open, onOpenChange, settings }: CartSheetProps) {
             <div className="flex-1 overflow-y-auto -mx-6 px-6 py-2">
               <div className="space-y-3 py-2">
                 {items.map((item) => (
-                  <div key={item.productId} className="flex gap-3 items-center bg-gray-50/70 p-3 rounded-lg border">
-                    <div className="w-14 h-14 rounded-md bg-white border overflow-hidden flex-shrink-0">
+                  <div key={item.productId} className="flex gap-3 items-center bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <div className="w-14 h-14 rounded-lg bg-white border border-slate-200 overflow-hidden flex-shrink-0">
                       {item.image ? (
                         <Image
                           src={item.image}
@@ -284,22 +283,22 @@ export function CartSheet({ open, onOpenChange, settings }: CartSheetProps) {
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-sm truncate">{item.productName}</p>
+                      <p className="font-semibold text-sm truncate text-slate-900">{item.productName}</p>
                       <p className="text-emerald-600 text-xs font-semibold">{item.price} {settings.currency}</p>
                       <div className="flex items-center gap-2 mt-1.5">
                         <Button
                           variant="outline"
                           size="icon"
-                          className="h-6 w-6 bg-white"
+                          className="h-6 w-6 bg-white border-slate-300"
                           onClick={() => updateQuantity(item.productId, item.quantity - 1)}
                         >
                           <Minus className="h-3 w-3" />
                         </Button>
-                        <span className="text-xs font-bold w-5 text-center">{item.quantity}</span>
+                        <span className="text-xs font-bold w-5 text-center text-slate-800">{item.quantity}</span>
                         <Button
                           variant="outline"
                           size="icon"
-                          className="h-6 w-6 bg-white"
+                          className="h-6 w-6 bg-white border-slate-300"
                           onClick={() => updateQuantity(item.productId, item.quantity + 1)}
                           disabled={item.quantity >= item.maxStock}
                         >
@@ -308,7 +307,7 @@ export function CartSheet({ open, onOpenChange, settings }: CartSheetProps) {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-6 w-6 text-destructive hover:text-destructive mr-auto"
+                          className="h-6 w-6 text-rose-500 hover:text-rose-700 hover:bg-rose-50 mr-auto"
                           onClick={() => removeItem(item.productId)}
                         >
                           <Trash2 className="h-3 w-3" />
@@ -316,65 +315,65 @@ export function CartSheet({ open, onOpenChange, settings }: CartSheetProps) {
                       </div>
                     </div>
                     <div className="text-left flex-shrink-0">
-                      <span className="text-sm font-bold text-gray-900">
+                      <span className="text-sm font-bold text-slate-900">
                         {(item.price * item.quantity).toFixed(2)}
                       </span>
-                      <span className="text-[11px] text-muted-foreground block">{settings.currency}</span>
+                      <span className="text-[11px] text-slate-500 block">{settings.currency}</span>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            <Separator className="my-2" />
+            <Separator className="my-2 bg-slate-200" />
 
             {/* Customer & Delivery Form */}
             <div className="space-y-3 py-2">
-              <h3 className="font-bold text-sm text-gray-900">بيانات التوصيل والفاتورة</h3>
+              <h3 className="font-bold text-sm text-slate-900">بيانات التوصيل والفاتورة</h3>
               
               <div className="space-y-1">
-                <Label htmlFor="cust-name" className="text-xs">اسم العميل *</Label>
+                <Label htmlFor="cust-name" className="text-xs font-semibold text-slate-700">اسم العميل *</Label>
                 <Input
                   id="cust-name"
                   placeholder="مثال: أحمد محمد"
                   value={customerName}
                   onChange={(e) => setCustomerName(e.target.value)}
-                  className="h-9 text-sm"
+                  className="h-10 text-sm bg-white border-slate-300 text-slate-900"
                 />
               </div>
 
               <div className="space-y-1">
-                <Label htmlFor="cust-phone" className="text-xs">رقم الهاتف للتواصل *</Label>
+                <Label htmlFor="cust-phone" className="text-xs font-semibold text-slate-700">رقم الهاتف للتواصل *</Label>
                 <Input
                   id="cust-phone"
                   placeholder="مثال: 01012345678"
                   value={customerPhone}
                   onChange={(e) => setCustomerPhone(e.target.value)}
                   dir="ltr"
-                  className="h-9 text-sm"
+                  className="h-10 text-sm bg-white border-slate-300 text-slate-900"
                 />
               </div>
 
               <div className="space-y-1">
-                <Label htmlFor="cust-notes" className="text-xs">العنوان / ملاحظات إضافية</Label>
+                <Label htmlFor="cust-notes" className="text-xs font-semibold text-slate-700">العنوان / ملاحظات إضافية</Label>
                 <Textarea
                   id="cust-notes"
                   placeholder="العنوان بالتفصيل أو أي تعليمات للتوصيل..."
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   rows={2}
-                  className="text-sm resize-none"
+                  className="text-sm resize-none bg-white border-slate-300 text-slate-900"
                 />
               </div>
 
               {/* Multiple WhatsApp destination selection if configured */}
               {whatsappList.length > 1 && (
                 <div className="space-y-1 pt-1">
-                  <Label className="text-xs">إرسال الطلب إلى فرع / رقم:</Label>
+                  <Label className="text-xs font-semibold text-slate-700">إرسال الطلب إلى فرع / رقم:</Label>
                   <select
                     value={selectedWhatsApp}
                     onChange={(e) => setSelectedWhatsApp(e.target.value)}
-                    className="w-full h-9 px-3 rounded-md border border-input bg-white text-xs"
+                    className="w-full h-10 px-3 rounded-lg border border-slate-300 bg-white text-slate-900 text-xs"
                   >
                     {whatsappList.map((entry, idx) => (
                       <option key={idx} value={entry.number}>
@@ -386,42 +385,42 @@ export function CartSheet({ open, onOpenChange, settings }: CartSheetProps) {
               )}
 
               {error && (
-                <div className="flex items-center gap-1.5 text-destructive text-xs bg-red-50 p-2.5 rounded-lg border border-red-200">
+                <div className="flex items-center gap-1.5 text-rose-700 text-xs bg-rose-50 p-2.5 rounded-lg border border-rose-200">
                   <AlertCircle className="h-4 w-4 flex-shrink-0" />
                   <span>{error}</span>
                 </div>
               )}
             </div>
 
-            <Separator className="my-2" />
+            <Separator className="my-2 bg-slate-200" />
 
             {/* WhatsApp Target Notification */}
-            <div className="bg-emerald-50/80 border border-emerald-200/80 rounded-lg p-2.5">
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-emerald-800 font-medium flex items-center gap-1.5">
+                <span className="text-emerald-900 font-semibold flex items-center gap-1.5">
                   <MessageCircle className="h-4 w-4 text-emerald-600" />
                   إرسال لواتساب: <strong>{settings.pharmacyName}</strong>
                 </span>
-                <span className="font-mono text-emerald-700 font-semibold" dir="ltr">
+                <span className="font-mono text-emerald-800 font-bold" dir="ltr">
                   +{normalizedTarget || 'لم يحدد'}
                 </span>
               </div>
-              <p className="text-[10px] text-emerald-600 mt-1 flex items-center gap-1">
-                {isMobile ? <Smartphone className="h-3 w-3 inline" /> : <Monitor className="h-3 w-3 inline" />}
+              <p className="text-[11px] text-emerald-700 mt-1 flex items-center gap-1">
+                {isMobile ? <Smartphone className="h-3.5 w-3.5 inline" /> : <Monitor className="h-3.5 w-3.5 inline" />}
                 <span>سيتم فتح تطبيق واتساب وإرسال تفاصيل الفاتورة كاملة ومباشرة</span>
               </p>
             </div>
 
             {/* Footer / Total & Checkout Button */}
-            <SheetFooter className="flex-col sm:flex-row gap-3 pt-3 border-t mt-auto">
+            <SheetFooter className="flex-col sm:flex-row gap-3 pt-3 border-t border-slate-200 mt-auto">
               <div className="flex items-center justify-between sm:flex-col sm:items-start w-full sm:w-auto">
-                <span className="text-xs text-muted-foreground">الإجمالي الكلي</span>
-                <span className="text-xl font-bold text-emerald-600">
-                  {total.toFixed(2)} <span className="text-xs font-normal text-gray-600">{settings.currency}</span>
+                <span className="text-xs text-slate-500 font-medium">الإجمالي الكلي</span>
+                <span className="text-2xl font-bold text-emerald-600">
+                  {total.toFixed(2)} <span className="text-xs font-normal text-slate-600">{settings.currency}</span>
                 </span>
               </div>
               <Button
-                className="bg-emerald-600 hover:bg-emerald-700 text-white flex-1 h-11 text-sm font-semibold shadow-md"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white flex-1 h-12 text-sm font-bold rounded-xl shadow-md cursor-pointer transition"
                 onClick={handleSubmitOrder}
                 disabled={isSubmitting}
               >
@@ -442,9 +441,9 @@ export function CartSheet({ open, onOpenChange, settings }: CartSheetProps) {
         ) : (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center py-12">
-              <ShoppingBag className="h-16 w-16 mx-auto text-muted-foreground/40 mb-3" />
-              <p className="text-gray-700 text-lg font-semibold">سلة التسوق فارغة</p>
-              <p className="text-muted-foreground text-xs mt-1">تصفح المنتجات في المتجر وأضف ما ترغب لشرائه</p>
+              <ShoppingBag className="h-16 w-16 mx-auto text-slate-300 mb-3" />
+              <p className="text-slate-800 text-lg font-bold">سلة التسوق فارغة</p>
+              <p className="text-slate-500 text-xs mt-1">تصفح المنتجات في المتجر وأضف ما ترغب لشرائه</p>
             </div>
           </div>
         )}

@@ -19,7 +19,8 @@ import {
   Clock,
   ExternalLink,
   Copy,
-  AlertCircle
+  AlertCircle,
+  Zap
 } from 'lucide-react'
 import {
   ORDER_STATUS_LABELS,
@@ -34,6 +35,11 @@ import {
   openWhatsApp,
   buildWhatsAppUrl
 } from '@/lib/phone-utils'
+import {
+  subscribeToOrders,
+  updateOrderStatusInFirebase,
+  deleteOrderFromFirebase
+} from '@/lib/firebase'
 
 interface OrdersManagerProps {
   currency: string
@@ -47,36 +53,24 @@ export function OrdersManager({ currency, settings }: OrdersManagerProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [copiedInvoice, setCopiedInvoice] = useState(false)
 
-  const fetchOrders = async () => {
-    try {
-      const res = await fetch('/api/orders')
-      if (res.ok) {
-        const data = await res.json()
-        setOrders(data)
-      }
-    } catch (error) {
-      console.error('Error fetching orders:', error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
   useEffect(() => {
-    fetchOrders()
-  }, [])
+    const unsubscribe = subscribeToOrders((realtimeOrders) => {
+      setOrders(realtimeOrders)
+      setIsLoading(false)
+      if (selectedOrder) {
+        const updated = realtimeOrders.find((o) => o.id === selectedOrder.id)
+        if (updated) setSelectedOrder(updated)
+      }
+    })
+
+    return () => unsubscribe()
+  }, [selectedOrder])
 
   const updateOrderStatus = async (orderId: string, status: OrderStatus) => {
     try {
-      const res = await fetch(`/api/orders/${orderId}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status })
-      })
-      if (res.ok) {
-        fetchOrders()
-        if (selectedOrder?.id === orderId) {
-          setSelectedOrder((prev) => prev ? { ...prev, status } : null)
-        }
+      await updateOrderStatusInFirebase(orderId, status)
+      if (selectedOrder?.id === orderId) {
+        setSelectedOrder((prev) => prev ? { ...prev, status } : null)
       }
     } catch (error) {
       console.error('Error updating order status:', error)
